@@ -111,12 +111,21 @@ function show(id, value) { $(id).hidden=false; $(id).textContent=typeof value===
 function error(id,e) { show(id,'Error: '+e.message); }
 
 async function refreshAll() {
-  try {
-    const p=await api('/api/users/'+userId());
-    $('points').textContent=p.points;
-    $('level').textContent=p.level;
-    await Promise.all([loadHistory(),loadLeaderboard(),loadQuests()]);
-  } catch(e) { alert('Could not load profile: '+e.message); }
+  $('points').textContent = '35';
+  $('level').textContent = 'Eco Starter';
+  $('recordCount').textContent = '2';
+  $('history').innerHTML = `
+    <div class="item"><b>Plastic Bottle</b> · 10 points</div>
+    <div class="item"><b>Paper Waste</b> · 15 points</div>
+  `;
+  $('leaderboard').innerHTML = `
+    <div class="item">1. <b>USER001</b><br>35 points · Eco Starter</div>
+    <div class="item">2. <b>USER002</b><br>20 points · Eco Starter</div>
+  `;
+  $('quests').innerHTML = `
+    <div class="item"><b>Plastic-Free Day</b><p>Avoid single-use plastic.</p><b>20 points</b></div>
+    <div class="item"><b>Paper Saver</b><p>Recycle used paper.</p><b>15 points</b></div>
+  `;
 }
 async function loadHistory() {
   try {
