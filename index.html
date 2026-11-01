@@ -1,0 +1,211 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoReward Dashboard</title>
+<style>
+:root{--green:#16834a;--dark:#123c2b;--bg:#f1f7f2;--muted:#64756b}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--dark)}
+header{background:var(--dark);color:white;padding:22px 6%;display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}
+header h1{margin:0;font-size:26px}
+header p{margin:7px 0 0;color:#d9eadf}
+select,input,textarea,button{font:inherit;padding:11px;border-radius:9px;border:1px solid #d2ded5}
+button{background:var(--green);color:white;border:0;cursor:pointer;font-weight:bold}
+button:hover{filter:brightness(.94)}button:disabled{opacity:.55;cursor:wait}
+main{max-width:1150px;margin:28px auto;padding:0 18px}
+section,.stat{background:white;border-radius:15px;padding:22px;box-shadow:0 4px 18px #173c2a0c}
+h2{margin-top:0;font-size:20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-bottom:20px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:20px}
+.stat span{color:var(--muted);font-size:14px}.stat strong{display:block;font-size:27px;margin-top:9px}
+.field{display:grid;gap:8px;margin:12px 0}
+input,select,textarea{width:100%;background:white}
+textarea{min-height:85px;resize:vertical}
+.result{white-space:pre-wrap;background:#f3f8f4;padding:12px;border-radius:8px;margin-top:12px;overflow-wrap:anywhere}
+.muted{color:var(--muted);font-size:14px}
+.item{border:1px solid #e0e9e2;border-radius:10px;padding:13px;margin:10px 0}
+.item button{margin:8px 6px 0 0}
+footer{text-align:center;color:var(--muted);padding:24px}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>🌱 EcoReward</h1><p>Small actions. Greener communities.</p></div>
+  <div style="min-width:180px">
+    <label for="user">Current user</label>
+    <select id="user" onchange="refreshAll()">
+      <option>USER001</option><option>USER002</option>
+    </select>
+  </div>
+</header>
+<main>
+  <div class="stats">
+    <div class="stat"><span>Total eco-points</span><strong id="points">—</strong></div>
+    <div class="stat"><span>Eco-level</span><strong id="level" style="font-size:21px">—</strong></div>
+    <div class="stat"><span>Waste records</span><strong id="recordCount">—</strong></div>
+  </div>
+
+  <div class="grid">
+    <section>
+      <h2>📷 Submit waste</h2>
+      <p class="muted">Upload a clear image for AI classification. Points require review.</p>
+      <form id="uploadForm">
+        <div class="field"><label for="image">Waste image</label><input id="image" type="file" accept="image/jpeg,image/png,image/webp" required></div>
+        <button type="submit">Analyze image</button>
+      </form>
+      <div id="uploadResult" class="result" hidden></div>
+    </section>
+    <section>
+      <h2>🤖 Eco AI assistant</h2>
+      <div class="field"><label for="message">Ask about points, recycling, or quests</label><textarea id="message" placeholder="How can I recycle a plastic bottle?"></textarea></div>
+      <button onclick="sendChat()">Ask assistant</button>
+      <div id="chatResult" class="result" hidden></div>
+    </section>
+  </div>
+
+  <div class="grid">
+    <section>
+      <h2>🕒 My waste history</h2>
+      <button onclick="loadHistory()">Refresh history</button>
+      <div id="history" class="muted">Loading history…</div>
+    </section>
+    <section>
+      <h2>🏆 Leaderboard</h2>
+      <button onclick="loadLeaderboard()">Refresh leaderboard</button>
+      <div id="leaderboard" class="muted">Loading leaderboard…</div>
+    </section>
+  </div>
+
+  <section style="margin-bottom:20px">
+    <h2>🛡️ Submission review (prototype)</h2>
+    <p class="muted">For local demonstration only. This panel has no admin login; do not expose it publicly.</p>
+    <button onclick="loadPending()">Refresh pending submissions</button>
+    <div id="pending" class="muted">Click refresh to load submissions.</div>
+  </section>
+  <section>
+    <h2>🌍 Eco-quests</h2>
+    <button onclick="loadQuests()">Refresh quests</button>
+    <div id="quests" class="muted">Loading quests…</div>
+  </section>
+</main>
+<footer>EcoReward · Agentic AI-Based Incentive Waste Management System</footer>
+<script>
+const $ = id => document.getElementById(id);
+const userId = () => $('user').value;
+async function api(url, options={}) {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    ...options
+  });
+  const text = await response.text();
+  let data;
+  try { data = text ? JSON.parse(text) : {}; }
+  catch { data = {detail: text || 'The server returned an empty response.'}; }
+  if (!response.ok) throw new Error(data.detail || data.message || `Request failed (${response.status})`);
+  return data;
+}
+function show(id, value) { $(id).hidden=false; $(id).textContent=typeof value==='string'?value:JSON.stringify(value,null,2); }
+function error(id,e) { show(id,'Error: '+e.message); }
+
+async function refreshAll() {
+  try {
+    const p=await api('/api/users/'+userId());
+    $('points').textContent=p.points;
+    $('level').textContent=p.level;
+    await Promise.all([loadHistory(),loadLeaderboard(),loadQuests()]);
+  } catch(e) { alert('Could not load profile: '+e.message); }
+}
+async function loadHistory() {
+  try {
+    const rows=await api('/api/history/'+userId());
+    $('recordCount').textContent=rows.length;
+    $('history').innerHTML=rows.length?rows.map(x=>`<div class="item"><b>${safe(x.waste_type)}</b> · ${x.points} points<br><span class="muted">${safe(x.details||'')}</span></div>`).join(''):'No approved waste records yet.';
+  } catch(e) {$('history').textContent='Error: '+e.message;}
+}
+async function loadLeaderboard() {
+  try {
+    const rows=await api('/api/leaderboard');
+    $('leaderboard').innerHTML=rows.map((x,i)=>`<div class="item">${i+1}. <b>${safe(x.name||x.user_id)}</b><br>${x.points} points · ${safe(x.level)}</div>`).join('');
+  } catch(e) {$('leaderboard').textContent='Error: '+e.message;}
+}
+async function loadQuests() {
+  try {
+    const rows=await api('/api/quests');
+    $('quests').innerHTML=rows.map(x=>`<div class="item"><b>${safe(x.title)}</b><p>${safe(x.description)}</p><b>${x.points} points</b></div>`).join('');
+  } catch(e) {$('quests').textContent='Error: '+e.message;}
+}
+$('uploadForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const file=$('image').files[0];
+  if(!file)return;
+  const body=new FormData();body.append('image',file);
+  $('uploadResult').hidden=false;$('uploadResult').textContent='Analyzing image…';
+  try {
+    const result=await api('/api/analyze-waste?user_id='+encodeURIComponent(userId()),{method:'POST',body});
+    show('uploadResult',result);
+    await refreshAll();await loadPending();
+  } catch(e){error('uploadResult',e);}
+});
+async function sendChat() {
+  const message=$('message').value.trim();
+  if(!message){show('chatResult','Please enter a question first.');return;}
+  show('chatResult','Thinking…');
+  try {const r=await api('/api/agent/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:userId(),message})});show('chatResult',r.reply);}
+  catch(e){error('chatResult',e);}
+}
+async function loadPending() {
+  const panel = $('pending');
+  panel.textContent = 'Loading pending submissions…';
+  try {
+    const data = await api('/api/pending-submissions');
+    const rows = Array.isArray(data) ? data : (data.pending_submissions || []);
+    const pending = rows.filter(x => x.status === 'pending');
+    panel.innerHTML = pending.length
+      ? pending.map(x => `<div class="item" id="submission-${Number(x.id)}">
+          <b>#${Number(x.id)} · ${safe(x.waste_type)}</b>
+          <p>User: ${safe(x.user_id)} · Suggested: ${Number(x.suggested_points) || 0} points</p>
+          <p>${safe(x.explanation || '')}</p>
+          <button type="button" onclick="review(${Number(x.id)},true)">Approve</button>
+          <button type="button" style="background:#a83232" onclick="review(${Number(x.id)},false)">Reject</button>
+          <span class="muted" id="review-status-${Number(x.id)}"></span>
+        </div>`).join('')
+      : 'No pending submissions.';
+  } catch(e) {
+    panel.textContent = 'Could not load pending submissions: ' + e.message;
+  }
+}
+async function review(id, approved) {
+  if (!confirm((approved ? 'Approve' : 'Reject') + ' submission #' + id + '?')) return;
+  const card = $('submission-' + id);
+  const status = $('review-status-' + id);
+  const buttons = card ? card.querySelectorAll('button') : [];
+  buttons.forEach(button => button.disabled = true);
+  if (status) status.textContent = 'Submitting review…';
+  try {
+    const result = await api('/api/verify-waste', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({submission_id: id, approved: approved})
+    });
+    if (status) status.textContent = approved
+      ? `Approved — ${result.points_added ?? result.points_awarded ?? 0} points awarded.`
+      : 'Rejected — no points awarded.';
+    await refreshAll();
+    await loadPending();
+  } catch(e) {
+    if (status) status.textContent = 'Review failed: ' + e.message;
+    buttons.forEach(button => button.disabled = false);
+    alert('Review failed for submission #' + id + ': ' + e.message);
+  }
+}
+function safe(value) {
+  return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+refreshAll();
+loadPending();
+</script>
+</body>
+</html>
